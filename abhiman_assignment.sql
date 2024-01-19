@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jan 18, 2024 at 11:08 PM
+-- Generation Time: Jan 19, 2024 at 12:15 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -44,14 +44,15 @@ INSERT INTO `options` (`id`, `question_id`, `option_text`) VALUES
 (4, 2, 'Pizza'),
 (5, 2, 'Burger'),
 (6, 2, 'Pasta'),
-(13, 5, 'JavaScript'),
-(14, 5, 'Python'),
-(15, 5, 'Java'),
-(16, 5, 'C++'),
-(17, 6, 'Syntax'),
-(18, 6, 'Community Support'),
-(19, 6, 'Performance'),
-(20, 6, 'New Features');
+(21, 7, 'Shimla'),
+(22, 7, 'Delhi'),
+(23, 7, 'Kerala'),
+(24, 8, 'Option 1'),
+(25, 8, 'Option 2'),
+(26, 8, 'Option 3'),
+(27, 9, 'Option A'),
+(28, 9, 'Option B'),
+(29, 9, 'Option C');
 
 -- --------------------------------------------------------
 
@@ -81,17 +82,23 @@ INSERT INTO `pollanalytics` (`id`, `poll_id`, `option_id`, `votes`) VALUES
 
 CREATE TABLE `polls` (
   `id` int(11) NOT NULL,
-  `title` varchar(255) NOT NULL
+  `title` varchar(255) NOT NULL,
+  `category` varchar(255) DEFAULT NULL,
+  `start_date` date DEFAULT NULL,
+  `end_date` date DEFAULT NULL,
+  `min_reward` int(11) DEFAULT NULL,
+  `max_reward` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `polls`
 --
 
-INSERT INTO `polls` (`id`, `title`) VALUES
-(1, 'Favorite Color'),
-(2, 'Favorite Food'),
-(3, 'Updated Programming Language Preferences');
+INSERT INTO `polls` (`id`, `title`, `category`, `start_date`, `end_date`, `min_reward`, `max_reward`) VALUES
+(1, 'Favorite Color', NULL, NULL, NULL, NULL, NULL),
+(2, 'Favorite Food', NULL, NULL, NULL, NULL, NULL),
+(3, 'New Poll Title', 'New Category', '2024-01-20', '2024-01-25', 5, 10),
+(4, 'Favourite Place', 'Indian Places', '2024-01-20', '2024-01-30', 5, 10);
 
 -- --------------------------------------------------------
 
@@ -102,6 +109,7 @@ INSERT INTO `polls` (`id`, `title`) VALUES
 CREATE TABLE `questions` (
   `id` int(11) NOT NULL,
   `poll_id` int(11) DEFAULT NULL,
+  `question_type` varchar(25) NOT NULL,
   `question_text` varchar(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -109,11 +117,12 @@ CREATE TABLE `questions` (
 -- Dumping data for table `questions`
 --
 
-INSERT INTO `questions` (`id`, `poll_id`, `question_text`) VALUES
-(1, 1, 'What is your favorite color?'),
-(2, 2, 'What is your favorite food?'),
-(5, 3, 'What is your favorite programming language now?'),
-(6, 3, 'Why do you prefer this language now?');
+INSERT INTO `questions` (`id`, `poll_id`, `question_type`, `question_text`) VALUES
+(1, 1, 'Multiple', 'What is your favorite color?'),
+(2, 2, 'Multiple', 'What is your favorite food?'),
+(7, 4, 'single', 'What is your favorite place?'),
+(8, 3, 'single', 'New Question 1'),
+(9, 3, 'multiple', 'New Question 2');
 
 -- --------------------------------------------------------
 
@@ -146,15 +155,16 @@ CREATE TABLE `uservotes` (
   `user_id` int(11) DEFAULT NULL,
   `poll_id` int(11) DEFAULT NULL,
   `question_id` int(11) DEFAULT NULL,
-  `selected_options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`selected_options`))
+  `selected_options` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`selected_options`)),
+  `submission_date` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `uservotes`
 --
 
-INSERT INTO `uservotes` (`id`, `user_id`, `poll_id`, `question_id`, `selected_options`) VALUES
-(2, 1, 1, 1, '[1,2,3]');
+INSERT INTO `uservotes` (`id`, `user_id`, `poll_id`, `question_id`, `selected_options`, `submission_date`) VALUES
+(2, 1, 1, 1, '[1,2,3]', '2024-01-19 07:56:11');
 
 --
 -- Indexes for dumped tables
@@ -211,7 +221,7 @@ ALTER TABLE `uservotes`
 -- AUTO_INCREMENT for table `options`
 --
 ALTER TABLE `options`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
 
 --
 -- AUTO_INCREMENT for table `pollanalytics`
@@ -223,13 +233,13 @@ ALTER TABLE `pollanalytics`
 -- AUTO_INCREMENT for table `polls`
 --
 ALTER TABLE `polls`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `questions`
 --
 ALTER TABLE `questions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `users`

@@ -6,15 +6,15 @@ const pollModel = require('../models/pollModel');
 function addQuestionSetsToPoll(pollId, questionSets, callback) {
     // Validate and add each question set to the poll
     questionSets.forEach((questionSet, index) => {
-        const { questionText, options } = questionSet;
+        const { questionText, questionType, options } = questionSet;
 
         // Validate the question set
-        if (!questionText || !options || !Array.isArray(options) || options.length === 0) {
+        if (!questionText || !questionType || !options || !Array.isArray(options) || options.length === 0) {
             return callback(`Invalid question set at index ${index}`);
         }
 
         // Add the question set to the poll
-        pollModel.createQuestion(pollId, questionText, (err, questionId) => {
+        pollModel.createQuestion(pollId, questionText, questionType, (err, questionId) => {
             if (err) {
                 return callback(err);
             }
@@ -121,9 +121,12 @@ function serveNextQuestion(userId, userPolls, index, res) {
 }
 
 // Helper function to calculate reward
-function calculateReward() {
-    return Math.floor(Math.random() * (10 - 1 + 1)) + 1; 
+function calculateReward(minReward, maxReward) {
+    return Math.floor(Math.random() * (maxReward - minReward + 1)) + minReward;
 }
+
+
+
 
 
 
@@ -132,17 +135,18 @@ function calculateReward() {
 
 // Controller function for creating poll
 exports.createPoll = (req, res) => {
-    const { title, questionSets } = req.body;
+    const { title, category, startDate, endDate, minReward, maxReward, questionSets } = req.body;
+
 
     // Validate the request body
-    if (!title || !questionSets || !Array.isArray(questionSets) || questionSets.length === 0) {
+    if (!title || !category || !startDate || !endDate || !minReward || !maxReward || !questionSets || !Array.isArray(questionSets) || questionSets.length === 0) {
         return res.status(400).json({
             error: 'Invalid request body',
         });
     }
 
     // Create the poll
-    pollModel.createPoll(title, (err, pollId) => {
+    pollModel.createPoll(title, category, startDate, endDate, minReward, maxReward, (err, pollId) => {
         if (err) {
             console.error(err);
             return res.status(500).json({
@@ -168,9 +172,10 @@ exports.createPoll = (req, res) => {
 };
 
 
-// Controller function for getting all polls
+// Controller function for fetching all created polls
 exports.getAllPolls = (req, res) => {
-    pollModel.getAllPollsAnalytics((err, polls) => {
+    // Call the pollModel function to get all polls
+    pollModel.getAllPolls((err, polls) => {
         if (err) {
             console.error(err);
             return res.status(500).json({
@@ -178,27 +183,61 @@ exports.getAllPolls = (req, res) => {
             });
         }
 
-        res.status(200).json({
-            polls: polls,
+        // Iterate through each poll and fetch additional details
+        const pollsWithDetails = [];
+
+        polls.forEach((poll) => {
+            // Call the pollModel function to get total votes and question details for the poll
+            pollModel.getPollDetails(poll.id, (err, pollDetails) => {
+                if (err) {
+                    console.error(err);
+                    return res.status(500).json({
+                        error: 'Internal Server Error',
+                    });
+                }
+
+                // Add details to the poll object
+                const pollWithDetails = {
+                    id: poll.id,
+                    title: poll.title,
+                    category: poll.category,
+                    startDate: poll.start_date,
+                    endDate: poll.end_date,
+                    totalVotes: pollDetails.totalVotes,
+                    numQuestionSets: pollDetails.numQuestionSets,
+                    questionDetails: pollDetails.questionDetails,
+                };
+
+                // Add the poll to the result array
+                pollsWithDetails.push(pollWithDetails);
+
+                // If all polls have been processed, send the response
+                if (pollsWithDetails.length === polls.length) {
+                    return res.status(200).json({
+                        polls: pollsWithDetails,
+                    });
+                }
+            });
         });
     });
 };
 
 
+
 // Controller function for updating a particular poll (details and question sets)
 exports.updatePoll = (req, res) => {
     const { pollId } = req.params;
-    const { title, questionSets } = req.body;
+    const {updateData, questionSets} = req.body;
 
     // Validate the request body
-    if (!title || !questionSets || !Array.isArray(questionSets) || questionSets.length === 0) {
+    if (Object.keys(updateData).length === 0) {
         return res.status(400).json({
             error: 'Invalid request body',
         });
     }
 
     // Update the poll details
-    pollModel.updatePollDetails(pollId, title, (err, affectedRows) => {
+    pollModel.updatePollDetails(pollId, updateData, (err, affectedRows) => {
         if (err) {
             console.error(err);
             return res.status(500).json({
@@ -219,9 +258,9 @@ exports.updatePoll = (req, res) => {
                 message: 'Poll updated successfully',
             });
         });
+
     });
 };
-
 
 // Controller function for fetching user polls and serving questions one at a time
 exports.getUserPollsAndQuestions = (req, res) => {
@@ -254,8 +293,8 @@ exports.submitPollAndUpdateData = (req, res) => {
         });
     }
 
-    // Check if the user has already submitted the poll
-    userModel.hasUserVoted(userId, pollId, (err, hasVoted) => {
+    // Fetch question type to determine if it's single or multiple selection
+    pollModel.getQuestionType(questionId, (err, questionType) => {
         if (err) {
             console.error(err);
             return res.status(500).json({
@@ -263,14 +302,16 @@ exports.submitPollAndUpdateData = (req, res) => {
             });
         }
 
-        if (hasVoted) {
+        // Check if the selected options are valid based on question type
+        if ((questionType === 'single' && selectedOptions.length !== 1) ||
+            (questionType === 'multiple' && selectedOptions.length < 2)) {
             return res.status(400).json({
-                error: 'User has already submitted the poll',
+                error: 'Invalid number of selected options based on question type',
             });
         }
 
-        // Record user vote
-        userModel.submitPoll(userId, pollId, questionId, selectedOptions, (err, submissionId) => {
+        // Check if the user has already submitted the poll
+        userModel.hasUserVoted(userId, pollId, (err, hasVoted) => {
             if (err) {
                 console.error(err);
                 return res.status(500).json({
@@ -278,23 +319,50 @@ exports.submitPollAndUpdateData = (req, res) => {
                 });
             }
 
-            // Reward the user 
-            const rewardAmount = calculateReward(); 
-            userModel.rewardUser(userId, rewardAmount, (err) => {
+            if (hasVoted) {
+                return res.status(400).json({
+                    error: 'User has already submitted the poll',
+                });
+            }
+
+            // Record user vote
+            userModel.submitPoll(userId, pollId, questionId, selectedOptions, (err, submissionId) => {
                 if (err) {
                     console.error(err);
+                    return res.status(500).json({
+                        error: 'Internal Server Error',
+                    });
                 }
 
-                // Update poll analytics
-                pollModel.updatePollAnalytics(pollId, selectedOptions, (err) => {
+                // Fetch minReward and maxReward from your polls table
+                pollModel.getMinAndMaxReward(pollId, (err, { min_reward, max_reward }) => {
                     if (err) {
                         console.error(err);
+                        return res.status(500).json({
+                            error: 'Internal Server Error',
+                        });
                     }
 
-                    res.status(201).json({
-                        message: 'Poll submitted successfully',
-                        submissionId: submissionId,
-                        rewardAmount: rewardAmount,
+                    // Reward the user with a value between min_reward and max_reward
+                    const rewardAmount = calculateReward(min_reward, max_reward);
+
+                    userModel.rewardUser(userId, rewardAmount, (err) => {
+                        if (err) {
+                            console.error(err);
+                        }
+
+                        // Update poll analytics
+                        pollModel.updatePollAnalytics(pollId, selectedOptions, (err) => {
+                            if (err) {
+                                console.error(err);
+                            }
+
+                            res.status(201).json({
+                                message: 'Poll submitted successfully',
+                                submissionId: submissionId,
+                                rewardAmount: rewardAmount,
+                            });
+                        });
                     });
                 });
             });

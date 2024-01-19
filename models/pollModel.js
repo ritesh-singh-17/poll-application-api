@@ -18,9 +18,9 @@ db.connect((err) => {
 });
 
 // Model functions
-exports.createPoll = (title, callback) => {
-    const sql = 'INSERT INTO Polls (title) VALUES (?)';
-    db.query(sql, [title], (err, result) => {
+exports.createPoll = (title, category, startDate, endDate, minReward, maxReward, callback) => {
+    const sql = 'INSERT INTO Polls (title, category, start_date, end_date, min_reward, max_reward) VALUES (?,?,?,?,?,?)';
+    db.query(sql, [title, category, startDate, endDate, minReward, maxReward], (err, result) => {
         if (err) {
             return callback(err, null);
         }
@@ -29,9 +29,9 @@ exports.createPoll = (title, callback) => {
 };
 
 // Model function for creating a question
-exports.createQuestion = (pollId, questionText, callback) => {
-    const sql = 'INSERT INTO Questions (poll_id, question_text) VALUES (?, ?)';
-    db.query(sql, [pollId, questionText], (err, result) => {
+exports.createQuestion = (pollId, questionText, questionType, callback) => {
+    const sql = 'INSERT INTO Questions (poll_id, question_type, question_text) VALUES (?, ?, ?)';
+    db.query(sql, [pollId, questionType, questionText], (err, result) => {
         if (err) {
             return callback(err, null);
         }
@@ -50,57 +50,83 @@ exports.createOption = (questionId, optionText, callback) => {
     });
 };
 
-// Model function to get all poll analytics
-exports.getAllPollsAnalytics = (callback) => {
-    const sql = 'SELECT Polls.*, PollAnalytics.* FROM Polls LEFT JOIN PollAnalytics ON Polls.id = PollAnalytics.poll_id';
+// Model function to get all polls
+exports.getAllPolls = (callback) => {
+    const sql = 'SELECT * FROM Polls';
     db.query(sql, (err, results) => {
         if (err) {
             return callback(err, null);
         }
-
-        const pollsWithAnalytics = [];
-
-        // Organize results into polls with analytics
-        results.forEach((row) => {
-            const pollId = row.poll_id;
-
-            // Find if the poll already exists in the array
-            const existingPoll = pollsWithAnalytics.find((poll) => poll.id === pollId);
-
-            if (existingPoll) {
-                // If the poll exists, add analytics data
-                existingPoll.analytics.push({
-                    optionId: row.option_id,
-                    totalVotes: row.votes,
-                    votes: row.votes,
-                });
-            } else {
-                // If the poll doesn't exist, create a new poll object
-                const newPoll = {
-                    id: pollId,
-                    title: row.title,
-                    analytics: [
-                        {
-                            optionId: row.option_id,
-                            totalVotes: row.votes,
-                            votes: row.votes,
-                        },
-                    ],
-                };
-
-                pollsWithAnalytics.push(newPoll);
-            }
-        });
-
-        return callback(null, pollsWithAnalytics);
+        return callback(null, results);
     });
 };
 
+// Model function to get poll details
+exports.getPollDetails = (pollId, callback) => {
+    const sqlTotalVotes = 'SELECT SUM(votes) as totalVotes FROM PollAnalytics WHERE poll_id = ?';
+    const sqlNumQuestionSets = 'SELECT COUNT(id) as numQuestionSets FROM Questions WHERE poll_id = ?';
+    const sqlQuestionDetails = 'SELECT id, question_text FROM Questions WHERE poll_id = ? LIMIT 1';
+
+    // Fetch total votes for the poll
+    db.query(sqlTotalVotes, [pollId], (err, totalVotesResult) => {
+        if (err) {
+            return callback(err, null);
+        }
+
+        const totalVotes = totalVotesResult[0].totalVotes || 0;
+
+        // Fetch the number of question sets for the poll
+        db.query(sqlNumQuestionSets, [pollId], (err, numQuestionSetsResult) => {
+            if (err) {
+                return callback(err, null);
+            }
+
+            const numQuestionSets = numQuestionSetsResult[0].numQuestionSets || 0;
+
+            // Fetch details of at least one question for the poll
+            db.query(sqlQuestionDetails, [pollId], (err, questionDetailsResult) => {
+                if (err) {
+                    return callback(err, null);
+                }
+
+                const questionDetails = questionDetailsResult.length > 0
+                    ? { id: questionDetailsResult[0].id, question_text: questionDetailsResult[0].question_text }
+                    : null;
+
+                return callback(null, {
+                    totalVotes: totalVotes,
+                    numQuestionSets: numQuestionSets,
+                    questionDetails: questionDetails,
+                });
+            });
+        });
+    });
+};
 
 // Model function for updating poll details
-exports.updatePollDetails = (pollId, title, callback) => {
-    const sql = 'UPDATE Polls SET title = ? WHERE id = ?';
-    db.query(sql, [title, pollId], (err, result) => {
+exports.updatePollDetails = (pollId, updateData, callback) => {
+    // Generate the SET part of the SQL query dynamically based on the provided update data
+    const updateFields = [];
+    const updateValues = [];
+
+    for (const key in updateData) {
+        if (updateData.hasOwnProperty(key) && key !== 'pollId') {
+            updateFields.push(`${key} = ?`);
+            updateValues.push(updateData[key]);
+        }
+    }
+
+    if (updateFields.length === 0) {
+        // No valid fields to update
+        return callback('No valid fields to update', null);
+    }
+
+    // Construct the SQL query
+    const sql = `UPDATE Polls SET ${updateFields.join(', ')} WHERE id = ?`;
+    const sqlValues = [...updateValues, pollId];
+
+    // Execute the query
+    db.query(sql, sqlValues, (err, result) => {
         if (err) {
             return callback(err, null);
         }
@@ -112,7 +138,7 @@ exports.updatePollDetails = (pollId, title, callback) => {
 exports.deleteQuestionSetsForPoll = (pollId, callback) => {
     const sqlDeleteQuestions = 'DELETE FROM Questions WHERE poll_id = ?';
     const sqlDeleteOptions = 'DELETE FROM Options WHERE question_id IN (SELECT id FROM Questions WHERE poll_id = ?)';
-    
+
     // Delete options first to avoid foreign key constraint violation
     db.query(sqlDeleteOptions, [pollId], (err) => {
         if (err) {
@@ -143,10 +169,10 @@ exports.getUserPolls = (userId, callback) => {
 
 // Model function to fetch questions and options for a poll
 exports.getQuestionsAndOptionsForPoll = (pollId, callback) => {
-    const sql = 'SELECT Q.id, Q.question_text, O.id AS option_id, O.option_text ' +
-                'FROM Questions Q ' +
-                'LEFT JOIN Options O ON Q.id = O.question_id ' +
-                'WHERE Q.poll_id = ?';
+    const sql = 'SELECT Q.id, Q.question_text, Q.question_type, O.id AS option_id, O.option_text ' +
+        'FROM Questions Q ' +
+        'LEFT JOIN Options O ON Q.id = O.question_id ' +
+        'WHERE Q.poll_id = ?';
     db.query(sql, [pollId], (err, results) => {
         if (err) {
             return callback(err, null);
@@ -162,6 +188,7 @@ exports.getQuestionsAndOptionsForPoll = (pollId, callback) => {
                 currentQuestion = {
                     id: row.id,
                     question_text: row.question_text,
+                    question_type: row.question_type,
                     options: []
                 };
                 questionsWithOptions.push(currentQuestion);
@@ -222,5 +249,40 @@ exports.getOverallPollAnalytics = (callback) => {
             return callback(err, null);
         }
         return callback(null, results);
+    });
+};
+
+// Model function to get min and max reward for a poll
+exports.getMinAndMaxReward = (pollId, callback) => {
+    const sql = 'SELECT min_reward, max_reward FROM Polls WHERE id = ?';
+    db.query(sql, [pollId], (err, results) => {
+        if (err) {
+            return callback(err, null);
+        }
+
+        if (results.length === 0) {
+            return callback('Poll not found', null);
+        }
+
+        const { min_reward, max_reward } = results[0];
+        return callback(null, { min_reward, max_reward });
+    });
+};
+
+// Model function to get question type for a question
+exports.getQuestionType = (questionId, callback) => {
+    const sql = 'SELECT question_type FROM Questions WHERE id = ?';
+    db.query(sql, [questionId], (err, results) => {
+        if (err) {
+            return callback(err, null);
+        }
+
+        if (results.length === 0) {
+            return callback('Question not found', null);
+        }
+
+        let questionType = results[0].question_type;
+        questionType = questionType.toLowerCase();
+        return callback(null, questionType);
     });
 };
