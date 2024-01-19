@@ -70,14 +70,21 @@ This project implements a RESTful API for a poll application using Node.js, Expr
 Endpoint: POST /polls
 Request Body:
     {
-        "title": "Your Poll Title",
-        "questions": [
+        "title": "Favourite Place",
+        "category": "Indian Places",
+        "startDate": "2024-01-20",
+        "endDate": "2024-01-30",
+        "minReward": 5,
+        "maxReward": 10,
+        "questionSets": [
             {
-                "text": "Question 1",
-                "options": ["Option A", "Option B"]
-            },
+                "questionType": "single",
+                "questionText": "What is your favorite place?",
+                "options": ["Shimla", "Delhi", "Kerala"]
+            }
         ]
     }
+
 
 2. **Fetch all polls with analytics**
 Endpoint: GET /polls
@@ -86,15 +93,28 @@ Endpoint: GET /polls
 Endpoint: PUT /polls/:pollId
 Request Body:
     {
-        "title": "Updated Poll Title",
-        "questions": [
+        "updateData": {
+            "title": "New Poll Title",
+            "category": "New Category",
+            "min_reward": 5,
+            "max_reward": 10,
+            "start_date": "2024-01-20",
+            "end_date": "2024-01-25"
+        },
+        "questionSets": [
             {
-                "id": 1,
-                "text": "Updated Question 1",
-                "options": ["Updated Option A", "Updated Option B"]
+                "questionText": "New Question 1",
+                "questionType": "single",
+                "options": ["Option 1", "Option 2", "Option 3"]
             },
+            {
+                "questionText": "New Question 2",
+                "questionType": "multiple",
+                "options": ["Option A", "Option B", "Option C"]
+            }
         ]
     }
+
 
 4. **Fetch user polls and serve questions**
 Endpoint: GET /polls/:userId
