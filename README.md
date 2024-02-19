@@ -131,8 +131,3 @@ Endpoint: GET /polls/analytics/:pollId
 
 7. **Fetch overall poll analytics**
 Endpoint: GET /polls/overall-analytics
-
-
-## Postman Collection
-For easy access to API endpoints, you can use the following link:
-https://api.postman.com/collections/29361977-7fc30f12-286e-4613-bbd5-c5eed4c19aef?access_key=PMAT-01HMF9ZVR5W13E18KYC93GYSS8
